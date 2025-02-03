@@ -1,13 +1,27 @@
-FROM python:3.9.7-alpine
+FROM python:3.9.7-slim
 
-RUN pip install Pyro4 dill
+LABEL maintainer="cassius66"
+LABEL description="Distributed MapReduce Framework"
+LABEL version="1.0"
 
-WORKDIR /
+# Set working directory
+WORKDIR /app
 
-ADD . ./
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
 
-EXPOSE 8002
-EXPOSE 8008
-EXPOSE 8009
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD [ "sh" ]
+# Copy project files
+COPY . .
+
+# Expose ports
+EXPOSE 8002 8008 8009
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import socket; s=socket.socket(); s.connect(('localhost', 8008))" || exit 1
+
+# Default command
+CMD ["python", "main.py", "server"]
