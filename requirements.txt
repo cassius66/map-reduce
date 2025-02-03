@@ -1,6 +1,24 @@
-Pyro4>=4.82
-dill>=0.3.6
-typing-extensions>=4.5.0
-pytest>=7.3.1
-ipython>=8.12.0
-notebook>=6.5.4
+# Core dependencies
+Pyro4==4.82
+dill==0.3.7
+typing-extensions==4.8.0
+
+# Testing and development
+pytest==7.4.3
+pytest-cov==4.1.0
+black==23.12.1
+isort==5.13.2
+flake8==6.1.0
+mypy==1.7.1
+
+# Logging and monitoring
+structlog==23.2.0
+python-json-logger==2.0.7
+
+# Development tools
+ipython==8.12.0
+notebook==7.0.6
+jupyter==1.0.0
+
+# Type stubs
+types-PyYAML==6.0.12.12

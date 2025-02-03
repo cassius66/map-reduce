@@ -1,101 +1,164 @@
+#!/usr/bin/env python3
+"""
+Main entry point for the MapReduce system.
+Handles both server and client initialization.
+"""
+from __future__ import annotations
+
 import argparse
 import logging
+import signal
+import sys
 from time import sleep
+from typing import Dict, Optional
 
 import Pyro4
-import Pyro4.util
 import Pyro4.errors
 import Pyro4.naming
 import Pyro4.socketutil
+import Pyro4.util
 from Pyro4 import Daemon, URI
+
+from map_reduce.client.client import run_client
+from map_reduce.server.configs import (BROADCAST_PORT, DAEMON_PORT, DHT_NAME,
+                                     FOLLOWER_NAME, IP, MASTER_NAME,
+                                     RQ_HANDLER_NAME)
+from map_reduce.server.dht import ChordNode, ChordService, service_address
+from map_reduce.server.logger import get_logger
+from map_reduce.server.nameserver import NameServer
+from map_reduce.server.nodes import Follower, Master, RequestHandler
+
+# Configure Pyro4
 Pyro4.config.SERVERTYPE = 'thread'
 Pyro4.config.SERIALIZER = 'dill'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('dill')
 
-from map_reduce.client.client import run_client
-from map_reduce.server.configs import *
-from map_reduce.server.dht import ChordNode, ChordService, service_address
-from map_reduce.server.logger import get_logger
-from map_reduce.server.nameserver import NameServer
-from map_reduce.server.nodes import Master, Follower, RequestHandler
-
-DHT_ADDRESS = URI(f'PYRO:{DHT_NAME}@{IP}:{DAEMON_PORT}')
-DHT_SERVICE_ADDRESS = service_address(DHT_ADDRESS)
-MASTER_ADDRESS = URI(f'PYRO:{MASTER_NAME}@{IP}:{DAEMON_PORT}')
-FOLLOWER_ADDRESS = URI(f'PYRO:{FOLLOWER_NAME}@{IP}:{DAEMON_PORT}')
-RQH_ADDRESS = URI(f'PYRO:{RQ_HANDLER_NAME}@{IP}:{DAEMON_PORT}')
-
-
 logger = get_logger('main')
 logger = logging.LoggerAdapter(logger, {'IP': IP})
 
-def setup_daemon(ip: str, port: int, objects: dict) -> Daemon:
-    ''' Setup main daemon. '''
-    daemon = Pyro4.Daemon(host=ip, port=port)
-    for name, obj in objects.items():
-        daemon.register(obj, name)
-    return daemon
-
-def setup_nameserver(ip: str, port: int) -> NameServer:
-    ''' Setup the nameserver wrapper. '''
-    return NameServer(ip, port)
-
-
-def run_servers():
-    # Main daemon.
-    objs_for_daemon = {}
-
-    dht = ChordNode(DHT_ADDRESS)
-    objs_for_daemon[DHT_ADDRESS.object] = dht
-
-    dht_service = ChordService(DHT_SERVICE_ADDRESS, DHT_ADDRESS)
-    objs_for_daemon[DHT_SERVICE_ADDRESS.object] = dht_service
-
-    master = Master(MASTER_ADDRESS)
-    objs_for_daemon[MASTER_NAME] = master
-
-    follower = Follower(FOLLOWER_ADDRESS)
-    objs_for_daemon[FOLLOWER_NAME] = follower
-
-    rq_handler = RequestHandler(RQH_ADDRESS)
-    objs_for_daemon[RQ_HANDLER_NAME] = rq_handler
-
-    main_daemon = setup_daemon(IP, DAEMON_PORT, objs_for_daemon)
-
-    # Nameserver.
-    nameserver = setup_nameserver(IP, BROADCAST_PORT)
-    nameserver.delegate(RQH_ADDRESS, rq_handler.start, rq_handler.stop)
-    nameserver.delegate(MASTER_ADDRESS, master.start, master.stop)
-    nameserver.start()
+class MapReduceServer:
+    """Main server class that manages all components of the MapReduce system."""
     
-    # Hang until nameservers stop contesting.
-    sleep(5)
+    def __init__(self) -> None:
+        self.daemon: Optional[Daemon] = None
+        self.nameserver: Optional[NameServer] = None
+        self.dht: Optional[ChordNode] = None
+        self.dht_service: Optional[ChordService] = None
+        self.running: bool = False
+        
+        # Setup addresses
+        self.dht_address = URI(f'PYRO:{DHT_NAME}@{IP}:{DAEMON_PORT}')
+        self.dht_service_address = service_address(self.dht_address)
+        self.master_address = URI(f'PYRO:{MASTER_NAME}@{IP}:{DAEMON_PORT}')
+        self.follower_address = URI(f'PYRO:{FOLLOWER_NAME}@{IP}:{DAEMON_PORT}')
+        self.rqh_address = URI(f'PYRO:{RQ_HANDLER_NAME}@{IP}:{DAEMON_PORT}')
+
+    def setup_daemon(self, objects: Dict) -> None:
+        """Setup main daemon with the provided objects."""
+        self.daemon = Pyro4.Daemon(host=IP, port=DAEMON_PORT)
+        for name, obj in objects.items():
+            self.daemon.register(obj, name)
+
+    def setup_nameserver(self) -> None:
+        """Setup and configure the nameserver."""
+        self.nameserver = NameServer(IP, BROADCAST_PORT)
+        self.nameserver.delegate(
+            self.rqh_address, 
+            self.request_handler.start, 
+            self.request_handler.stop
+        )
+        self.nameserver.delegate(
+            self.master_address,
+            self.master.start,
+            self.master.stop
+        )
+        self.nameserver.start()
+
+    def signal_handler(self, signum: int, frame) -> None:
+        """Handle shutdown signals gracefully."""
+        logger.info(f'Received signal {signum}')
+        self.shutdown()
+
+    def shutdown(self) -> None:
+        """Gracefully shutdown all components."""
+        self.running = False
+        
+        if self.nameserver:
+            logger.info('Stopping nameserver...')
+            self.nameserver.stop()
+        
+        if self.daemon:
+            logger.info('Stopping main daemon...')
+            self.daemon.shutdown()
+        
+        # Cleanup resources
+        self.dht = None
+        self.dht_service = None
+        logger.info('Server shutdown complete.')
+        sys.exit(0)
+
+    def run(self) -> None:
+        """Run the MapReduce server."""
+        # Initialize components
+        self.dht = ChordNode(self.dht_address)
+        self.dht_service = ChordService(self.dht_service_address, self.dht_address)
+        self.master = Master(self.master_address)
+        self.follower = Follower(self.follower_address)
+        self.request_handler = RequestHandler(self.rqh_address)
+
+        # Setup daemon with all objects
+        self.setup_daemon({
+            self.dht_address.object: self.dht,
+            self.dht_service_address.object: self.dht_service,
+            MASTER_NAME: self.master,
+            FOLLOWER_NAME: self.follower,
+            RQ_HANDLER_NAME: self.request_handler
+        })
+
+        # Setup nameserver
+        self.setup_nameserver()
+        
+        # Setup signal handlers
+        signal.signal(signal.SIGINT, self.signal_handler)
+        signal.signal(signal.SIGTERM, self.signal_handler)
+        
+        # Wait for nameservers to stabilize
+        logger.info('Waiting for nameserver initialization...')
+        sleep(5)
+        
+        # Start main request loop
+        self.running = True
+        logger.info('Server started successfully')
+        try:
+            while self.running and self.daemon:
+                self.daemon.requestLoop(timeout=1.0)
+        except Exception as e:
+            logger.error(f'Error in main loop: {e}')
+            self.shutdown()
+
+def main() -> None:
+    """Main entry point for the application."""
+    parser = argparse.ArgumentParser(
+        description='Start a MapReduce module.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        'module',
+        choices=['server', 'client'],
+        help='Module to run (server or client)'
+    )
     
-    # Start request loop.
+    args = parser.parse_args()
+    
     try:
-        main_daemon.requestLoop()
-    except KeyboardInterrupt:
-        logger.info('Server stopped by user.')
-    finally:
-        logger.info('Killing nameserver.')
-        nameserver.stop()
-        
-        logger.info('Killing main daemon.')
-        main_daemon.shutdown()
-        
-        del nameserver
-        del main_daemon
-        del dht
-        del dht_service
-
-        logger.info('Exiting.')
-        exit(0)
+        if args.module == 'server':
+            server = MapReduceServer()
+            server.run()
+        else:
+            run_client()
+    except Exception as e:
+        logger.error(f'Fatal error: {e}')
+        sys.exit(1)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser('Start a map-reduce module.')
-    parser.add_argument('module', action='store', choices=['server', 'client'])
-    args = parser.parse_args()
-    if args.module == 'server':
-        run_servers()
-    else:
-        run_client()
+    main()

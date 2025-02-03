@@ -1,28 +1,24 @@
-# Distributed MapReduce Framework
+# MapReduce Framework
 
-[![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+A distributed MapReduce implementation in Python using Pyro4 for remote procedure calls and a Chord-based DHT for data management.
 
-A high-performance distributed MapReduce implementation in Python, designed for scalable data processing across multiple nodes. Built with Pyro4 and featuring a Chord-based Distributed Hash Table (DHT) for efficient data management.
+## Features
 
-## ✨ Key Features
+- Distributed processing with load balancing
+- Fault-tolerant architecture
+- Data distribution using Chord DHT
+- Data replication
+- Task progress monitoring
+- Structured logging with rotation
+- Docker support
 
-- 🚀 Distributed processing with automatic load balancing
-- 💪 Fault-tolerant architecture with node failure recovery
-- 🔄 Efficient data distribution using Chord DHT
-- 🔒 Built-in data replication for reliability
-- 📊 Real-time task progress monitoring
-- 🛠️ Easy-to-use API for custom map/reduce functions
-
-## 🚀 Quick Start
-
-### Prerequisites
+## Prerequisites
 
 - Python 3.9+
 - Docker
 - Git
 
-### Installation
+## Installation
 
 1. Clone the repository:
 ```bash
@@ -37,37 +33,53 @@ docker network create --driver=bridge --subnet=172.18.0.0/16 --ip-range=172.18.1
 
 3. Install dependencies:
 ```bash
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-4. Build and run:
-```bash
-# Start 3 server nodes
-./scripts/batch_run server 3 -dt
+## Usage
 
-# In a new terminal, run the example
+### Running with Docker
+
+1. Build the image:
+```bash
+docker build -t map-reduce .
+```
+
+2. Run a cluster:
+```bash
+# Start master node
+docker run -d --name master --network distributed map-reduce python main.py server
+
+# Start worker nodes
+docker run -d --name worker1 --network distributed map-reduce python main.py server
+docker run -d --name worker2 --network distributed map-reduce python main.py server
+```
+
+3. View logs:
+```bash
+docker logs -f master
+```
+
+### Running Locally
+
+1. Start server nodes:
+```bash
+./scripts/batch_run server 3 -dt
+```
+
+2. Run the example:
+```bash
 python examples/word_count.py --file examples/sample.txt
 ```
 
-## 📝 Examples
+## Examples
 
-The `examples` directory contains sample implementations to help you get started:
-
-### 1. Word Count Example
-
-A classic MapReduce example that counts word occurrences in text. Run it with:
-
-```bash
-# Run with sample text
-python examples/word_count.py
-
-# Or process your own text file
-python examples/word_count.py --file path/to/your/file.txt
-```
-
-### 2. Custom Implementation
-
-Here's a simple word count example:
+### Word Count Example
 
 ```python
 from map_reduce.client.server_interface import ServerInterface
@@ -79,11 +91,9 @@ text_data = [
     "world of mapreduce"
 ]
 
-# Define map function
 def map(line_num: int, line: str) -> list[tuple[str, int]]:
     return [(word, 1) for word in line.split()]
 
-# Define reduce function
 def reduce(word: str, counts: list[int]) -> int:
     return sum(counts)
 
@@ -96,59 +106,117 @@ if daemon:
     print("Word counts:", results)
 ```
 
-Output:
+## Architecture
+
+The framework consists of:
+
+1. Master Node: Coordinates task distribution
+2. Worker Nodes: Execute map and reduce tasks
+3. DHT Layer: Handles data storage and retrieval
+
+### Logging
+
+The framework uses structured logging with:
+
+- Console and file output
+- Log rotation (10MB per file, 5 backup files)
+- Optional JSON formatting
+- Configurable log levels per component
+
+Example configuration:
 ```python
-{
-    'hello': 2,
-    'world': 2,
-    'distributed': 1,
-    'computing': 1,
-    'of': 1,
-    'mapreduce': 1
+LOGGING = {
+    "master": {
+        "level": "INFO",
+        "json_format": True,
+        "log_file": "logs/master.log"
+    },
+    "worker": {
+        "level": "DEBUG",
+        "json_format": False
+    }
 }
 ```
 
-## 🏗️ Architecture
+## Configuration
 
-The framework consists of three main components:
-
-1. **Master Node**: Coordinates task distribution and manages the overall MapReduce process
-2. **Worker Nodes**: Execute map and reduce tasks in parallel
-3. **DHT Layer**: Handles distributed data storage and retrieval using Chord protocol
-
-## 🔧 Configuration
-
-Key configuration options in `map_reduce/server/configs.py`:
+Key settings in `map_reduce/server/configs.py`:
 
 ```python
 REQUEST_TIMEOUT = 0.5        # Request timeout in seconds
-MAX_TASK_TIMEOUT = 300      # Maximum task execution time (5 minutes)
+MAX_TASK_TIMEOUT = 300      # Maximum task execution time
 ITEMS_PER_CHUNK = 16        # Items processed per map task
-DHT_REPLICATION_SIZE = 5    # Number of data replicas for fault tolerance
+DHT_REPLICATION_SIZE = 5    # Number of data replicas
 ```
 
-## 🤝 Contributing
+## Testing
 
-Contributions are welcome! Here's how you can help:
+Run tests with pytest:
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=map_reduce
+
+# Run specific test
+pytest map_reduce/tests/test_dht.py
+```
+
+## Troubleshooting
+
+Common issues:
+
+1. Connection Refused
+   - Check Docker network configuration
+   - Verify ports are open
+   - Check nameserver status
+
+2. Task Timeout
+   - Adjust MAX_TASK_TIMEOUT in configs
+   - Check worker logs
+   - Verify network connectivity
+
+3. Memory Issues
+   - Adjust ITEMS_PER_CHUNK
+   - Monitor worker memory usage
+   - Check container limits
+
+## Development
+
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+2. Format code:
+```bash
+black .
+isort .
+mypy .
+```
+
+## Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and commit: `git commit -m 'Add some feature'`
-4. Push to your fork: `git push origin feature-name`
-5. Open a Pull Request
+2. Create a feature branch
+3. Make changes
+4. Submit a pull request
 
-Please ensure your code:
-- Includes proper error handling
-- Has type hints
-- Follows PEP 8 style guide
-- Includes tests for new features
+Please ensure code:
+- Has error handling
+- Includes type hints
+- Follows PEP 8
+- Includes tests
+- Updates documentation
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see LICENSE file
 
-## 🙏 Acknowledgments
+## References
 
-- Inspired by Google's MapReduce paper
-- Built with [Pyro4](https://pyro4.readthedocs.io/) for remote procedure calls
-- Uses Chord DHT algorithm for distributed data management
+- Google MapReduce paper
+- Pyro4 documentation
+- Chord DHT paper
