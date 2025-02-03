@@ -258,9 +258,13 @@ class ChordNode:
                 self._check_ring_availability()
                 time.sleep(DHT_STABILIZATION_INTERVAL)
             except (CommunicationError, NamingError) as e:
-                logger.error(str(e))
-            # except Exception as e:
-            #     logger.error(f'{e.__class__.__name__}: {e}.')
+                logger.error(f"Communication error in periodic calls: {str(e)}")
+            except Exception as e:
+                logger.error(f"Critical error in periodic calls: {e.__class__.__name__}: {str(e)}")
+                if isinstance(e, AttributeError) and "NoneType" in str(e):
+                    logger.info("Attempting to recover from NoneType error...")
+                    self._clear_successors()
+                    self._predecessor = None
 
 
     # Helper methods.
