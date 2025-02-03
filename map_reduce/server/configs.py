@@ -9,15 +9,16 @@ class ConfigError(Exception):
 IP = Pyro4.socketutil.getIpAddress(None, workaround127=None)
 DAEMON_PORT = 8008
 BROADCAST_PORT = 8009
-REQUEST_TIMEOUT = 0.02  # Seconds.
+REQUEST_TIMEOUT = 0.5  # Seconds - increased from 0.02 for better stability
 REQUEST_RETRIES = 5
+MAX_TASK_TIMEOUT = 300  # 5 minutes timeout for tasks
 RESULTS_KEY = 'map-reduce/final-results'
 
 # DHT.
 DHT_NAME = 'chord.dht'
 DHT_SERVICE_NAME = 'chord.dht.service'
 DHT_FINGER_TABLE_SIZE = 160 // 2
-DHT_STABILIZATION_INTERVAL = 0.1  # Important to stay as low as possible for quick replication.
+DHT_STABILIZATION_INTERVAL = 1.0  # Increased from 0.1 to reduce network load
 DHT_RECHECK_INTERVAL = 1
 DHT_REPLICATION_SIZE = 5
 
