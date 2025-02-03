@@ -1,5 +1,3 @@
-#!/bin/bash
-
 TEST=${1:-dht}
 CONTAINER_NAME="map-reduce.tester"
 
