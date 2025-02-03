@@ -1,83 +1,154 @@
-# Map-Reduce Protocol Implementation
+# Distributed MapReduce Framework
 
-This project is a Python implementation of the Map-Reduce protocol, designed to facilitate distributed computing. It utilizes Pyro4 for remote procedure calls and a Chord-based Distributed Hash Table (DHT) for efficient data management.
+[![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Table of Contents
-- [Requirements](#requirements)
-- [Setup](#setup)
-- [Usage](#usage)
-  - [Starting the Server](#starting-the-server)
-  - [Running the Client](#running-the-client)
-- [API Reference](#api-reference)
-- [Logging](#logging)
-- [Contributing](#contributing)
-- [License](#license)
+A high-performance distributed MapReduce implementation in Python, designed for scalable data processing across multiple nodes. Built with Pyro4 and featuring a Chord-based Distributed Hash Table (DHT) for efficient data management.
 
-## Requirements
+## ✨ Key Features
 
-### System Requirements
-- Docker image: `python:3.9.7-alpine`
-  - To pull the image (with internet connection):
-    ```bash
-    docker pull python:3.9.7-alpine
-    ```
-  - Or load from a provided tar image:
-    ```bash
-    docker load -i <img_path>
-    ```
+- 🚀 Distributed processing with automatic load balancing
+- 💪 Fault-tolerant architecture with node failure recovery
+- 🔄 Efficient data distribution using Chord DHT
+- 🔒 Built-in data replication for reliability
+- 📊 Real-time task progress monitoring
+- 🛠️ Easy-to-use API for custom map/reduce functions
 
-- Create a Docker network named "distributed":
-    ```bash
-    docker network create --driver=bridge --subnet=172.18.0.0/16 --ip-range=172.18.1.0/25 --gateway=172.18.1.254 distributed
-    ```
+## 🚀 Quick Start
 
-## Setup
+### Prerequisites
+
+- Python 3.9+
+- Docker
+- Git
+
+### Installation
 
 1. Clone the repository:
-   ```bash
-   git clone <repository_url>
-   cd <repository_name>
-   ```
-
-2. Ensure Docker is running and the network is created as specified above.
-
-## Usage
-
-### Starting the Server
-
-To start the server, navigate to the project root and run the following command, replacing `k` with the number of server instances you want to run:
 ```bash
-./scripts/batch_run server k -dt
+git clone https://github.com/cassius66/map-reduce.git
+cd map-reduce
 ```
 
-### Running the Client
-
-To start a client request, execute:
+2. Create Docker network:
 ```bash
-./scripts/run_client
+docker network create --driver=bridge --subnet=172.18.0.0/16 --ip-range=172.18.1.0/25 --gateway=172.18.1.254 distributed
 ```
 
-The client script located in `./map_reduce/client/client.py` requires initial data in the format `[(IN_KEY, IN_VALUE)]`, along with the `map` and `reduce` functions defined as follows:
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Build and run:
+```bash
+# Start 3 server nodes
+./scripts/batch_run server 3 -dt
+
+# In a new terminal, run the example
+python examples/word_count.py --file examples/sample.txt
+```
+
+## 📝 Examples
+
+The `examples` directory contains sample implementations to help you get started:
+
+### 1. Word Count Example
+
+A classic MapReduce example that counts word occurrences in text. Run it with:
+
+```bash
+# Run with sample text
+python examples/word_count.py
+
+# Or process your own text file
+python examples/word_count.py --file path/to/your/file.txt
+```
+
+### 2. Custom Implementation
+
+Here's a simple word count example:
 
 ```python
-def map(in_key: IN_KEY, in_value: IN_VALUE) -> [(OUT_KEY, MID_VALUE)]:
-    pass
+from map_reduce.client.server_interface import ServerInterface
 
-def reduce(out_key: OUT_KEY, values: [MID_VALUE]) -> OUT_VAL:
-    pass
+# Input data
+text_data = [
+    "hello world",
+    "hello distributed computing",
+    "world of mapreduce"
+]
+
+# Define map function
+def map(line_num: int, line: str) -> list[tuple[str, int]]:
+    return [(word, 1) for word in line.split()]
+
+# Define reduce function
+def reduce(word: str, counts: list[int]) -> int:
+    return sum(counts)
+
+# Run MapReduce
+server = ServerInterface()
+daemon = server.startup(text_data, map, reduce)
+if daemon:
+    print("Processing...")
+    results = server.await_results()
+    print("Word counts:", results)
 ```
 
-The provided API will return the results of the MapReduce procedure through `ServerInterface.await_results()`, yielding a `dict` or key/value pair iterable of type signature `{ OUT_KEY: OUT_VAL }`.
+Output:
+```python
+{
+    'hello': 2,
+    'world': 2,
+    'distributed': 1,
+    'computing': 1,
+    'of': 1,
+    'mapreduce': 1
+}
+```
 
-## API Reference
+## 🏗️ Architecture
 
-- **Map Function**: Processes input key-value pairs and produces intermediate key-value pairs.
-- **Reduce Function**: Aggregates intermediate values by key to produce final output values.
+The framework consists of three main components:
 
-## Logging
+1. **Master Node**: Coordinates task distribution and manages the overall MapReduce process
+2. **Worker Nodes**: Execute map and reduce tasks in parallel
+3. **DHT Layer**: Handles distributed data storage and retrieval using Chord protocol
 
-The application uses a logging mechanism to track server activities and errors. Logs can be found in the designated log files or console output, depending on your configuration.
+## 🔧 Configuration
 
-## Contributing
+Key configuration options in `map_reduce/server/configs.py`:
 
-Contributions are welcome! Please fork the repository and submit a pull request with your changes. Ensure that your code adheres to the project's coding standards and includes appropriate tests.
+```python
+REQUEST_TIMEOUT = 0.5        # Request timeout in seconds
+MAX_TASK_TIMEOUT = 300      # Maximum task execution time (5 minutes)
+ITEMS_PER_CHUNK = 16        # Items processed per map task
+DHT_REPLICATION_SIZE = 5    # Number of data replicas for fault tolerance
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and commit: `git commit -m 'Add some feature'`
+4. Push to your fork: `git push origin feature-name`
+5. Open a Pull Request
+
+Please ensure your code:
+- Includes proper error handling
+- Has type hints
+- Follows PEP 8 style guide
+- Includes tests for new features
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Inspired by Google's MapReduce paper
+- Built with [Pyro4](https://pyro4.readthedocs.io/) for remote procedure calls
+- Uses Chord DHT algorithm for distributed data management

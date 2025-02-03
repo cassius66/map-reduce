@@ -1,0 +1,7 @@
+The MapReduce programming model has been successfully used by Google for many different purposes.
+This distributed computing approach can process vast amounts of data in parallel.
+MapReduce is inspired by the map and reduce functions commonly used in functional programming.
+The framework handles all the details of partitioning the input data, scheduling program execution across machines.
+Fault tolerance is a key feature of MapReduce - when a machine fails, its work is redistributed.
+The distributed nature of MapReduce allows for massive scalability across hundreds or thousands of machines.
+This makes it possible to process very large datasets efficiently and reliably.
