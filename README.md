@@ -148,18 +148,3 @@ MAX_TASK_TIMEOUT = 300      # Maximum task execution time
 ITEMS_PER_CHUNK = 16        # Items processed per map task
 DHT_REPLICATION_SIZE = 5    # Number of data replicas
 ```
-
-## Testing
-
-Run tests with pytest:
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=map_reduce
-
-# Run specific test
-pytest map_reduce/tests/test_dht.py
-```
